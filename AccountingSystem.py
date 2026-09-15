@@ -2,10 +2,12 @@ import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 from datetime import datetime
 import xml.dom.minidom
+import calendar
 import os
 
-TRANSACTIONS_FILE = 'transactions.xml'
-ACCOUNTS_FILE = 'chart_of_accounts.xml'
+entity = input('What is the name of the Entity: ')
+TRANSACTIONS_FILE = f'transactions_{entity}.xml'
+ACCOUNTS_FILE = f'chart_of_accounts_{entity}.xml'
 
 
 def prettify(elem):
@@ -39,7 +41,32 @@ def create_transactions_file():
         print(f"File already exists: {TRANSACTIONS_FILE}")
 
 
-def load_transactions():
+def load_transactions(specific):
+
+    def re_date(reform):
+        dt_object = datetime.strptime(str(reform), "%Y-%m-%d")
+        return dt_object.strftime("%m/%d/%Y")
+
+    def get_month_range(month_year_string):
+        try:
+            date_object = datetime.strptime(f"01/{month_year_string}", "%d/%m/%Y").date()
+        except ValueError:
+            print(f"Error: Invalid date format. Please use 'MM/YYYY'.")
+        last_day = calendar.monthrange(date_object.year, date_object.month)[1]
+        start_date = date_object.replace(day=1)
+        end_date = date_object.replace(day=last_day)
+        return re_date(str(start_date)), re_date(str(end_date))
+
+    if specific == 2:
+        month_ending = input(print("What month do you need? (format: MM/YYYY )"))
+        start_d, end_d = get_month_range(month_ending)
+    else:
+        pass
+
+    def date_converter(given):
+        date_object = datetime.strptime(given, "%m/%d/%Y")
+        return date_object
+
     try:
         tree = ET.parse(TRANSACTIONS_FILE)
         root = tree.getroot()
@@ -55,17 +82,32 @@ def load_transactions():
             posted = transaction_elem.find('Posted').text
             authorized = transaction_elem.find('Authorized').text
 
+            if specific == 1:
+                transactions.append({
+                    'Date': date,
+                    'Description': description,
+                    'Source': source,
+                    'Account': account,
+                    'Debit': debit,
+                    'Credit': credit,
+                    'Posted': posted,
+                    'Authorized': authorized
+                })
 
-            transactions.append({
-                'Date': date,
-                'Description': description,
-                'Source': source,
-                'Account': account,
-                'Debit': debit,
-                'Credit': credit,
-                'Posted': posted,
-                'Authorized': authorized
-            })
+            elif specific == 2 and description != 'End of Month Posting' and date_converter(start_d) <= date_converter(
+                    date) <= date_converter(end_d):
+                transactions.append({
+                    'Date': date,
+                    'Description': description,
+                    'Source': source,
+                    'Account': account,
+                    'Debit': debit,
+                    'Credit': credit,
+                    'Posted': posted,
+                    'Authorized': authorized
+                })
+            else:
+                pass
 
         return transactions
     except FileNotFoundError:
@@ -73,22 +115,27 @@ def load_transactions():
 
 
 def save_transactions(transactions):
-    root = ET.Element('transactions')
+    ffile = open(f'transactions_{entity}.xml',"w")
+    ffile.write('<?xml version="1.0" encoding="utf-8"?>\n')
+    ffile.write("<transactions>\n")
 
     for transaction in transactions:
-        transaction_elem = ET.SubElement(root, 'transaction')
-        ET.SubElement(transaction_elem, 'Date').text = transaction['Date']
-        ET.SubElement(transaction_elem, 'Description').text = transaction['Description']
-        ET.SubElement(transaction_elem, 'Source').text = transaction['Source']
-        ET.SubElement(transaction_elem, 'Account').text = transaction['Account']
-        ET.SubElement(transaction_elem, 'Debit').text = str(transaction['Debit'])
-        ET.SubElement(transaction_elem, 'Credit').text = str(transaction['Credit'])
-        ET.SubElement(transaction_elem, 'Posted').text = transaction['Posted']
-        ET.SubElement(transaction_elem, 'Authorized').text = transaction['Authorized']
-
-
-    tree = ET.ElementTree(root)
-    tree.write(TRANSACTIONS_FILE)
+        day = transaction['Date']
+        account = transaction['Account']
+        description = transaction['Description']
+        source = transaction['Source']
+        debit = transaction['Debit']
+        credit = transaction['Credit']
+        posted = transaction['Posted']
+        authorized = transaction['Authorized']
+        entry = [day, account, description, source, debit, credit, posted, authorized]
+        dd = ['Date', 'Account', 'Description', 'Source', 'Debit', 'Credit', 'Posted', 'Authorized']
+        ffile.write("\t<transaction>\n")
+        for i in range(0, len(entry), 1):
+            ffile.write(f'\t\t<{str(dd[i])}>{str(entry[i])}</{str(dd[i])}>\n')
+        ffile.write("\t</transaction>\n")
+    ffile.write("</transactions>")
+    ffile.close()
 
 
 def load_accounts():
@@ -114,23 +161,21 @@ def load_accounts():
 
 
 def save_accounts(accounts):
-    root = ET.Element('accounts')
+    ffile = open(f'chart_of_accounts_{entity}.xml',"w")
+    ffile.write('<?xml version="1.0" encoding="utf-8"?>\n')
+    ffile.write("<accounts>\n")
 
     for account in accounts:
-        account_elem = ET.SubElement(root, 'account')
-        ET.SubElement(account_elem, 'Name').text = account['Name']
-        ET.SubElement(account_elem, 'Type').text = account['Type']
-        ET.SubElement(account_elem, 'status').text = account['Status']
-
-    tree = ET.ElementTree(root)
-
-    # Convert the XML tree to a formatted string
-    xml_str = ET.tostring(root, encoding='utf-8').decode()
-    xml_str = '\n'.join([line for line in xml_str.split('\n') if line.strip()])
-
-    # Write the formatted string to the file
-    with open(ACCOUNTS_FILE, 'wb') as file:
-        file.write(f'<?xml version="1.0" encoding="utf-8"?>\n{xml_str}'.encode())
+        name = account['Name']
+        type = account['Type']
+        status = account['Status']
+        ffile.write("\t<account>\n")
+        ffile.write(f'\t\t<Name>{name}</Name>\n')
+        ffile.write(f'\t\t<Type>{type}</Type>\n')
+        ffile.write(f'\t\t<status>{status}</status>\n')
+        ffile.write("\t</account>\n")
+    ffile.write("</accounts>")
+    ffile.close()
 
 
 def post_transaction(poster):
@@ -182,7 +227,7 @@ def post_transaction(poster):
     amount_tax = float(amount_tax) if amount_tax.strip() else 0.00
     authorized = input('Who authorized the transaction: ')
 
-    transactions = load_transactions()
+    transactions = load_transactions(1)
     transactions.append({
         'Date': date_1,
         'Account': debit,
@@ -193,7 +238,6 @@ def post_transaction(poster):
         'Posted': poster,
         'Authorized': authorized
     })
-    save_transactions(transactions)
     transactions.append({
         'Date': date_1,
         'Account': credit,
@@ -214,7 +258,7 @@ def add_account():
 
     def type_account():
         account_t = input('Enter the account type (a for asset, l for liability, equ for equity, r for revenue, '
-                             'ex for expense): ')
+                            'ex for expense): ')
         if account_t in ('a', 'l', 'equ', 'r', 'ex'):
             pass
         else:
@@ -224,13 +268,13 @@ def add_account():
     account_type = type_account()
     if account_type == 'a':
         account_type = 'Asset'
-    if account_type == 'l':
+    elif account_type == 'l':
         account_type = 'Liability'
-    if account_type == 'equ':
+    elif account_type == 'equ':
         account_type = 'Equity'
-    if account_type == 'r':
+    elif account_type == 'r':
         account_type = 'Revenue'
-    if account_type == 'ex':
+    else:
         account_type = 'Expense'
 
     accounts = load_accounts()
@@ -247,7 +291,6 @@ def change_account_status():
     list_accounts()
     account_name = input("What account's status would you like to change: ")
     tree = ET.parse(TRANSACTIONS_FILE)
-    root = tree.getroot()
 
     accounts = load_accounts()
     accounts.sort(key=lambda acc: acc['name'])  # Sort accounts alphabetically by name
@@ -278,7 +321,7 @@ def get_account_balance(account, transactions):
 
 
 def show_general_ledger():
-    transactions = load_transactions()
+    transactions = load_transactions(1)
 
     sorted_transactions = sorted(transactions, key=lambda t: datetime.strptime(t['Date'], '%m/%d/%Y'))
 
@@ -300,7 +343,7 @@ def show_general_ledger():
 
 
 def show_ledger(account):
-    transactions = load_transactions()
+    transactions = load_transactions(1)
 
     sorted_transactions = sorted(transactions, key=lambda t: datetime.strptime(t['Date'], '%m/%d/%Y'))
 
@@ -350,14 +393,14 @@ def get_account_type(account):
     return 'Unknown'
 
 
-def show_balance_sheet():
-    transactions = load_transactions()
+def show_balance_sheet(specific):
+    transactions = load_transactions(specific)
     accounts = load_accounts()
     print('Balance Sheet')
 
     print('-------------------------------------------')
     print('Assets:')
-    print('Account\t\t\t\tBalance')
+    print('Account\t\t\tBalance')
     print('-------------------------------------------')
     total_assets = total_assets_1 = 0
 
@@ -386,7 +429,7 @@ def show_balance_sheet():
             pass
 
     print('Liabilities:')
-    print('Account\t\t\t\tBalance')
+    print('Account\t\t\tBalance')
     print('-------------------------------------------')
     total_liabilities = total_liabilities_1 = 0
 
@@ -416,7 +459,7 @@ def show_balance_sheet():
             pass
 
     print('Equity:')
-    print('Account\t\t\t\tBalance')
+    print('Account\t\t\tBalance')
     print('-------------------------------------------')
     total_equity = retained_earnings = 0
 
@@ -438,24 +481,33 @@ def show_balance_sheet():
         else:
             pass
 
-    print(f'Retained Earnings\t{str(round(retained_earnings, 2))[:7]:>7}\t\t{ round((retained_earnings / total_assets_1) * 100, 2)}%')
+    try:
+        print(f'Retained Earnings\t{str(round(retained_earnings, 2))[:7]:>7}\t\t{ round((retained_earnings / total_assets_1) * 100, 2)}%')
+
+    except ZeroDivisionError:
+        print(f'Retained Earnings\t{str(round(retained_earnings, 2))[:7]:>7}\t\t0%')
 
     print('-------------------------------------------')
-    print(f'Total Assets:\t\t\t{str(round(total_assets, 2))[:10]:>10}\t{round((total_assets / total_assets_1) * 100, 2)}%')
-    print(f'Total Liabilities:\t\t{str(round(total_liabilities, 2))[:10]:>10}\t{round((total_liabilities / total_assets_1) * 100, 2)}%')
-    print(f'Total Equity:\t\t\t{str(round(total_equity, 2))[:10]:>10}\t{round((total_equity / total_assets_1) * 100, 2)}%')
+    try:
+        print(f'Total Assets:\t\t\t{str(round(total_assets, 2))[:10]:>10}\t{round((total_assets / total_assets_1) * 100, 2)}%')
+        print(f'Total Liabilities:\t\t{str(round(total_liabilities, 2))[:10]:>10}\t{round((total_liabilities / total_assets_1) * 100, 2)}%')
+        print(f'Total Equity:\t\t\t{str(round(total_equity, 2))[:10]:>10}\t{round((total_equity / total_assets_1) * 100, 2)}%')
+    except ZeroDivisionError:
+        print(f'Total Assets:\t\t\t{str(round(total_assets, 2))[:10]:>10}\t0%')
+        print(f'Total Liabilities:\t\t{str(round(total_liabilities, 2))[:10]:>10}\t0%')
+        print(f'Total Equity:\t\t\t{str(round(total_equity, 2))[:10]:>10}\t0%')
     print('-------------------------------------------')
 
 
-def show_income_statement():
-    transactions = load_transactions()
+def show_income_statement(specific):
+    transactions = load_transactions(specific)
     accounts = load_accounts()
     print('Income Statement')
     print('-------------------------------------------')
     print('Revenue:')
     print('Account\t\tAmount')
     print('-------------------------------------------')
-    total_revenue = 0
+    total_revenue = total_expenses = 0
 
     for account in accounts:
         account_name = account['Name']
@@ -497,7 +549,7 @@ def show_income_statement():
     try:
         print(f'Total Expense:\t\t{round(total_expenses, 2)}\t\t{round((total_expenses / total_revenue) * 100, 2)}%')
     except ZeroDivisionError:
-        print(f'Total Revenue:\t\t{round(total_expenses, 2)}\t\t0%')
+        print(f'Total Expenses:\t\t{round(total_expenses, 2)}\t\t0%')
     print('-------------------------------------------')
 
     net_income = total_revenue - total_expenses
@@ -544,7 +596,7 @@ def print_accounts(accounts):
 
 
 def end_of_month_post(poster):
-    transactions = load_transactions()
+    transactions = load_transactions(1)
     accounts = load_accounts()
     list_accounts()
     equity = input('What is the Equity Account Name: ')
@@ -581,7 +633,7 @@ def end_of_month_post(poster):
 
         def post_transaction_e(date_1, account, description, source, debit, credit, poster, authorized):
 
-            transactions = load_transactions()
+            transactions = load_transactions(1)
             transactions.append({
                 'Date': date_1,
                 'Account': account,
@@ -611,7 +663,8 @@ def main_menu():
         print('6. Show Balance Sheet')
         print('7. Show Income Statement')
         print('8. End of Month Posting')
-        print('9. Exit')
+        print('9. Monthly Statement')
+        print('10. Exit')
 
         choice = input('Enter your choice: ')
 
@@ -628,12 +681,15 @@ def main_menu():
             account = input('Enter the account name: ')
             show_ledger(account)
         elif choice == '6':
-            show_balance_sheet()
+            show_balance_sheet(1)
         elif choice == '7':
-            show_income_statement()
+            show_income_statement(1)
         elif choice == '8':
             end_of_month_post(poster)
         elif choice == '9':
+            show_balance_sheet(2)
+            show_income_statement(2)
+        elif choice == '10':
             break
         else:
             print('Invalid choice. Please try again.')
