@@ -4,6 +4,7 @@ from datetime import datetime
 import xml.dom.minidom
 import calendar
 import os
+from xml.sax.saxutils import escape
 
 entity = input('What is the name of the Entity: ')
 TRANSACTIONS_FILE = f'transactions_{entity}.xml'
@@ -116,8 +117,8 @@ def load_transactions(specific):
 
 def save_transactions(transactions):
     ffile = open(f'transactions_{entity}.xml',"w")
-    ffile.write('<?xml version="1.0" encoding="utf-8"?>\n')
-    ffile.write("<transactions>\n")
+    ffile.write('<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n')
+    ffile.write('<transactions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n')
 
     for transaction in transactions:
         day = transaction['Date']
@@ -132,7 +133,8 @@ def save_transactions(transactions):
         dd = ['Date', 'Account', 'Description', 'Source', 'Debit', 'Credit', 'Posted', 'Authorized']
         ffile.write("\t<transaction>\n")
         for i in range(0, len(entry), 1):
-            ffile.write(f'\t\t<{str(dd[i])}>{str(entry[i])}</{str(dd[i])}>\n')
+            safe_value = escape(str(entry[i]))
+            ffile.write(f'\t\t<{str(dd[i])}>{safe_value}</{str(dd[i])}>\n')
         ffile.write("\t</transaction>\n")
     ffile.write("</transactions>")
     ffile.close()
@@ -317,7 +319,7 @@ def get_account_balance(account, transactions):
         if Account == account:
             balance -= debit
             balance += credit
-    return balance
+            return balance
 
 
 def show_general_ledger():
@@ -326,7 +328,7 @@ def show_general_ledger():
     sorted_transactions = sorted(transactions, key=lambda t: datetime.strptime(t['Date'], '%m/%d/%Y'))
 
     print('General Ledger')
-    print('Date\t\tAccount\t\tDebit\t\tCredit\tPosted\tAuthorized')
+    print('Date\t\tAccount\t\t\tDebit\t\tCredit\t\tPosted\tAuthorized')
 
     for transaction in sorted_transactions:
         date = transaction['Date']
@@ -337,9 +339,9 @@ def show_general_ledger():
         authorized = transaction['Authorized']
 
         if debit > 0:
-            print(f'{date}\t{account[:15]:<15}\t{round(debit,2)}\t\t\t\t{posted}\t\t{authorized}')
+            print(f'{date}\t{account[:15]:<15}\t\t{round(debit,2)}\t\t\t\t{posted}\t\t{authorized}')
         else:
-            print(f'\t\t\t\t{account[:15]:<15}\t\t{round(credit,2)}\t\t{posted}\t\t{authorized}')
+            print(f'\t\t\t{account[:15]:<15}\t\t\t{round(credit,2)}\t\t{posted}\t\t{authorized}')
 
 
 def show_ledger(account):
@@ -348,7 +350,7 @@ def show_ledger(account):
     sorted_transactions = sorted(transactions, key=lambda t: datetime.strptime(t['Date'], '%m/%d/%Y'))
 
     print(f'Ledger for account: {account}')
-    print('Date\t\tDescription\t\t\t\t\t\t\t\tDebit\t\tCredit\t\t\tBalance\t\tPosted\tAuthorized')
+    print('Date\t\tDescription\t\t\t\t\tSource\t\tDebit\t\tCredit\t\tBalance\t\tPosted\tAuthorized')
 
     balance = 0
 
@@ -356,6 +358,7 @@ def show_ledger(account):
         date = transaction['Date']
         debit = transaction['Debit']
         credit = transaction['Credit']
+        source = transaction['Source']
         description = transaction['Description']
         account_1 = transaction['Account']
         account_type = get_account_type(account)
@@ -366,20 +369,20 @@ def show_ledger(account):
             if account_type == 'Liability' or account_type == 'Equity' or account_type == 'Revenue':
                 if debit > 0:
                     balance -= debit
-                    print(f'{date}\t{description[:25]:<25}\t\t\t\t{round(debit, 2):<15}\t\t\t\t{round(balance, 2):<15}'
+                    print(f'{date}\t{description[:50]:<50}{source}\t{round(debit, 2):<15}\t\t\t{round(balance, 2):<15}'
                           f'\t{posted}\t\t{authorized}')
                 else:
                     balance += credit
-                    print(f'{date}\t{description[:25]:<25}\t\t\t\t\t\t\t{round(credit, 2):<15}\t{round(balance, 2):<15}'
+                    print(f'{date}\t{description[:50]:<50}{source}\t\t\t{round(credit, 2):<15}\t{round(balance, 2):<15}'
                           f'\t{posted}\t\t{authorized}')
             elif account_type == 'Asset' or account_type == 'Expense':
                 if debit > 0:
                     balance += debit
-                    print(f'{date}\t{description[:25]:<25}\t\t\t\t{round(debit, 2):<15}\t\t\t\t{round(balance, 2):<15}'
+                    print(f'{date}\t{description[:50]:<50}{source}\t{round(debit, 2):<15}\t\t\t{round(balance, 2):<15}'
                           f'\t{posted}\t\t{authorized}')
                 else:
                     balance -= credit
-                    print(f'{date}\t{description[:25]:<25}\t\t\t\t\t\t\t{round(credit, 2):<15}\t{round(balance, 2):<15}'
+                    print(f'{date}\t{description[:50]:<50}{source}\t\t\t{round(credit, 2):<15}\t{round(balance, 2):<15}'
                           f'\t{posted}\t\t{authorized}')
         else:
             pass
